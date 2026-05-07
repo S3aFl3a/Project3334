@@ -2,15 +2,15 @@
 // This project will simulate a stream of incoming work, place that work into 
 // one or more queues, and assign tasks to a bounded worker pool according to a 
 // scheduling policy. 
-
+use rand::Rng;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 //Putting stuff here that is REQUIRED for this assignment (use std)
 use std::sync::{mpsc, Arc, Mutex}; // mpsc is for communication over channels...
 use std::thread; //for threads JoinHandle/
 //use std:: collections::VecDeque;
 use std::time::{Duration, Instant}; // for duration
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering}; // safely states thread when to stop for this
+use std::sync::atomic::{AtomicBool, Ordering}; // safely states thread when to stop for this
 
 // Task dispatcher needs to send tasks, create tasks
 // fixed 1000 tasks, randomizer (()), 20ms intervals
@@ -45,14 +45,14 @@ struct Task {
 }
 
 // BARRIER TO MAKE READING EASIER HERE ///////
-
+// Policy 
 #[derive(Clone, Copy)]
 enum Policy {
     FIFO, // Fifo // 70% IO / 30% CPU
     Optimized, //Optomized 80%
 }
 
-// METRICS (make sure it is totalruntime)
+        // METRICS (make sure it is totalruntime)
 // storing info
 #[derive(Default)]
 struct Metrics {
@@ -62,6 +62,8 @@ struct Metrics {
     total_wait: u128,
     total_turnaround: u128,
 }
+
+
 // producer
 fn generator (tx:mpsc::Sender<Task>, done: Arc<AtomicBool>) {
     thread::spawn(move || {
@@ -98,7 +100,7 @@ fn generator (tx:mpsc::Sender<Task>, done: Arc<AtomicBool>) {
             thread::sleep(Duration::from_millis(10));
         }
         done.store(true, Ordering::Relaxed);
-    })
+    });
 }
 
 // focusing on Queue and its schedule
@@ -107,11 +109,12 @@ fn dispatcher(
     worker_senders: Vec<mpsc::Sender<Task>>,
     policy: Policy,
     done: Arc<AtomicBool>,
-) {
+) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let mut rr = 0;
 
-        while !done.load(Ordering::Relaxed) || !rx.is_empty() {
+        // cleanshutdown
+        while !done.load(Ordering::Relaxed) {
             if let Ok(task) = rx.recv_timeout(Duration::from_millis(10)) {
                 match policy{
                     Policy::FIFO => {
@@ -123,7 +126,7 @@ fn dispatcher(
                         // CPU tasks will now spread evenly go IO 
                         let target = match task.kind {
                             TaskKind::CPU => 0,
-                            TaskKind::IO => rr % WORKER_COUNT,
+                            TaskKind::IO => (rr + 1) % WORKER_COUNT,
                         };
 
                         worker_senders[target].send(task).unwrap();
@@ -132,7 +135,7 @@ fn dispatcher(
                 }
             }
         }
-    });
+    })
 }
 
 fn worker(
@@ -140,7 +143,7 @@ fn worker(
     rx: mpsc::Receiver<Task>,
     metrics: Arc<Mutex<Metrics>>,
     shutdown: Arc<AtomicBool>,
-){
+) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         while !shutdown.load(Ordering::Relaxed) {
             if let Ok(task) = rx.recv_timeout(Duration::from_millis(50)) {
@@ -148,9 +151,10 @@ fn worker(
                 let wait = start.duration_since(task.arrival_time).as_millis();
 
                 thread::sleep(Duration::from_millis(task.duration_ms));
-                let turnaround = Instant:: now().duration_since(task.arrival_time).as_millis();
+                let turnaround = Instant::now().duration_since(task.arrival_time).as_millis();
 
                 let mut m = metrics.lock().unwrap();
+
                 m.completed += 1;
                 m.total_wait += wait;
                 m.total_turnaround += turnaround;
@@ -162,13 +166,13 @@ fn worker(
                 println!("Worker {} finished task {}", id, task.id);
             }
         }
-    });
+    })
 }
 
 // Experiments
 // focused on running the experiments
 fn run(policy:Policy) {
-    println!("\n"),
+    println!("\n");
 
     match policy {
         Policy::FIFO => println!("Policy: FIFO"),
@@ -195,22 +199,29 @@ fn run(policy:Policy) {
         worker_handles.push(worker(i, wrx, m, sd));
     }
     generator(tx, done.clone());
-    dispatcher(rx,worker_senders, policy, done.clone());
+    let dispatcher_handle = dispatcher (rx,worker_senders, policy, done.clone());
 
     // waiting a bit
     thread::sleep(Duration::from_secs(5));
     shutdown.store(true,Ordering::Relaxed);
 
+    dispatcher_handle.join().unwrap();
+
+    for h in worker_handles {
+        h.join().unwrap();
+    }
+
     let m = metrics.lock().unwrap();
 
     let makespan = start_time.elapsed().as_millis();
+
     println!("\nRESULTS ARE:");
     println!("Tasks completed: {}", m.completed);
-    println!("CPU tasks: {}", m.cpu_done);
-    println!("IO tasks: {}", m.io_done);
+    println!("CPU tasks: {}", m.cpu_completed);
+    println!("IO tasks: {}", m.io_completed);
 
 
-    if m.completed >0 {
+    if m.completed > 0 {
         println!("Avg wait: {} ms", m.total_wait / m.completed as u128);
         println!("Avg turnaround: {} ms", m.total_turnaround / m.completed as u128);
     }
