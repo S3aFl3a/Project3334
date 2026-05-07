@@ -70,7 +70,10 @@ fn generator (tx:mpsc::Sender<Task>, done: Arc<AtomicBool>) {
         let mut rng = StdRng::seed_from_u64(42);
 
         for id in 0..TOTAL_TASKS {
-            let roll: f64 = rng.gen();
+            // rng.gen isn't being taken as something so...
+            // let roll: f64 = rng.gen();
+            // doing gen_range instead
+            let roll = rng.gen_range(0.0..1.0);
 
             let kind = if roll < 0.3 {
                 TaskKind::CPU
@@ -202,7 +205,10 @@ fn run(policy:Policy) {
     let dispatcher_handle = dispatcher (rx,worker_senders, policy, done.clone());
 
     // waiting a bit
-    thread::sleep(Duration::from_secs(5));
+    while metrics.lock().unwrap().completed < TOTAL_TASKS {
+        thread::sleep(Duration::from_millis(100));
+    }
+    
     shutdown.store(true,Ordering::Relaxed);
 
     dispatcher_handle.join().unwrap();
