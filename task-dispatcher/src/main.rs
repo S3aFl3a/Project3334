@@ -68,7 +68,7 @@ fn generator (tx:mpsc::Sender<Task>, done: Arc<AtomicBool>) {
         let mut rng = StdRng::seed_from_u64(42);
 
         for id in 0..TOTAL_TASKS {
-            let roll: f64 = r64 = rng.gen();
+            let roll: f64 = rng.gen();
 
             let kind = if roll < 0.3 {
                 TaskKind::CPU
@@ -78,7 +78,7 @@ fn generator (tx:mpsc::Sender<Task>, done: Arc<AtomicBool>) {
 
             let cpu_cost = match kind {
                 TaskKind::CPU => 35,
-                TaskKind:: IO => 10,
+                    TaskKind::IO => 10,
             };
 
             let duration = match kind {
@@ -106,7 +106,7 @@ fn dispatcher(
     rx: mpsc::Receiver<Task>,
     worker_senders: Vec<mpsc::Sender<Task>>,
     policy: Policy,
-    done: Src<AtomicBool>,
+    done: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
         let mut rr = 0;
@@ -138,7 +138,7 @@ fn dispatcher(
 fn worker(
     id: usize,
     rx: mpsc::Receiver<Task>,
-    metrics: Arc<Mutex<Metrices>>,
+    metrics: Arc<Mutex<Metrics>>,
     shutdown: Arc<AtomicBool>,
 ){
     thread::spawn(move || {
@@ -147,8 +147,8 @@ fn worker(
                 let start = Instant::now();
                 let wait = start.duration_since(task.arrival_time).as_millis();
 
-                thread;:sleep(Duration::from_millis(task.duration_ms));
-                let turaround = Instant:: now().duration_since(task.arrival_time).as_millis();
+                thread::sleep(Duration::from_millis(task.duration_ms));
+                let turnaround = Instant:: now().duration_since(task.arrival_time).as_millis();
 
                 let mut m = metrics.lock().unwrap();
                 m.completed += 1;
@@ -156,8 +156,8 @@ fn worker(
                 m.total_turnaround += turnaround;
 
                 match task.kind {
-                    TaskKind::CPU => m.cpu_done += 1,
-                    TaskKind::IO => m.io_done += 1,
+                    TaskKind::CPU => m.cpu_completed += 1,
+                    TaskKind::IO => m.io_completed += 1,
                 }
                 println!("Worker {} finished task {}", id, task.id);
             }
@@ -168,7 +168,7 @@ fn worker(
 // Experiments
 // focused on running the experiments
 fn run(policy:Policy) {
-    print!("\n"),
+    println!("\n"),
 
     match policy {
         Policy::FIFO => println!("Policy: FIFO"),
@@ -180,7 +180,7 @@ fn run(policy:Policy) {
     let mut worker_senders = vec![];
     let mut worker_handles = vec![];
 
-    let metrices = Arc::new(Mutex::new(Metrics::default()));
+    let metrics = Arc::new(Mutex::new(Metrics::default()));
     let shutdown = Arc::new(AtomicBool::new(false));
     let done = Arc::new(AtomicBool::new(false));
 
@@ -203,12 +203,28 @@ fn run(policy:Policy) {
 
     let m = metrics.lock().unwrap();
 
-    let makespan = star_time.elapsed().as_millis();
+    let makespan = start_time.elapsed().as_millis();
     println!("\nRESULTS ARE:");
     println!("Tasks completed: {}", m.completed);
     println!("CPU tasks: {}", m.cpu_done);
     println!("IO tasks: {}", m.io_done);
 
+
+    if m.completed >0 {
+        println!("Avg wait: {} ms", m.total_wait / m.completed as u128);
+        println!("Avg turnaround: {} ms", m.total_turnaround / m.completed as u128);
+    }
+
+    // TOTAL RUNTIME IS REQUIRED SO ...
+    println!("Total runtime (makespan): {} ms", makespan);
+    println!("=================\n");
+
+
     //progress
 }
 
+// Main will focus on the 2 experiments
+fn main() {
+    run(Policy::FIFO);
+    run(Policy::Optimized);
+}
