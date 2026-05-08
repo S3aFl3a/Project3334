@@ -1,4 +1,4 @@
-# Task Dispatcher
+# Concurrent Task Dispatcher in RUST
 
 ## Project Overview 
 This final project impements a concurrent task dispatcher that is simulated using Rust's concurrency tools. The system acts how an operating system scheduler handles incoming tasks then assigns them to a bounded worker pool, and evaluates different scheduling methods. 
