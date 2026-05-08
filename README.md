@@ -7,7 +7,7 @@ This is designed with a scheduler where tasks arrive over time and are classifie
 
 This focuses on system performances and completion time under Results.
 
-##Build the Project
+## Build the Project
 Make sure Rust and Cargo are installed for this program to run. 
 Also make sure it is properly installed in the correcting setting (Windows, Mac, etc.)
 When building a project with Rust, use the command 'cargo build' as it is the command used to compile Rust projects.
