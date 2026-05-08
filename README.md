@@ -38,4 +38,11 @@ Every task they do, wait for the next one.
   This experiment doesn't really focus on fairness, but tends to always assign CPU tasks to worker 0 (in this case), a notably difference between FIFO and OPTIMIZED. Any IO tasks are distributed across the remaining workers and shows the performances under a obvious uneven task distribution. 
   
   From the results given by avg wait, turnaround, and total runtime, there is a large difference between these two policies in results. 
+
+  ## Tools Used 
+  The tools used as reference are from class documents and the rust documentation
+  https://github.com/alfazick/rustprogramming
+  https://doc.rust-lang.org/cargo/guide/creating-a-new-project.html
+  # For the documentation I used as a reminder of the cargo commands / checking any confusion
+  
   
